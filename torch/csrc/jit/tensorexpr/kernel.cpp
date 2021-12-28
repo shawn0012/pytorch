@@ -145,6 +145,17 @@ c10::optional<at::Device> pickDeviceType(const std::shared_ptr<Graph>& graph) {
       }
     }
   }
+  for (auto const& input : graph->inputs()) {
+    if (auto tt = input->type()->cast<TensorType>()) {
+      if (auto inputDevice = tt->device()) {
+        TORCH_INTERNAL_ASSERT(
+            !device || *device == *inputDevice,
+            buildErrorMessage(
+                "Different devices specified for inputs to the fuser."));
+        device = inputDevice;
+      }
+    }
+  }
   TORCH_INTERNAL_ASSERT(
       device,
       buildErrorMessage("Could not find device in fuser graph inputs."));
@@ -916,6 +927,8 @@ BufHandle TensorExprKernel::bindSymbolicShapeInput(
 
 Tensor TensorExprKernel::bindInput(const torch::jit::Value* input) {
   auto const& t = input->type();
+  auto const& outputs = input->owningGraph()->outputs();
+  std::unordered_set<const Value*> outputs_set(outputs.begin(), outputs.end());
   Tensor result(nullptr, nullptr);
   switch (t->kind()) {
     case TypeKind::TensorType: {
@@ -923,11 +936,28 @@ Tensor TensorExprKernel::bindInput(const torch::jit::Value* input) {
       if (!input->isCompleteTensor()) {
         auto bufHandle =
             bindSymbolicShapeInput(input, "t" + input_name_map_[input]);
-        bufs_.emplace(input, bufHandle.node());
+
+        if (!outputs_set.count(input)) {
+          bufs_.emplace(input, bufHandle.node());
+        } else {
+          // If 'input' is also a graph output, then we need to produce a copy
+          std::vector<DimArg> inputTensorDims;
+          for (size_t i = 0; i < bufHandle.dims().size(); i++) {
+            inputTensorDims.emplace_back(
+                DimArg(bufHandle.dims()[i], "i" + c10::to_string(i)));
+          }
+          result = Compute(
+              "input" + c10::to_string(bufs_.size() + 1),
+              inputTensorDims,
+              [&](const std::vector<VarHandle>& axes) {
+                return bufHandle.load(axes);
+              });
+          bufs_.emplace(input, result.buf());
+        }
         bufferArgs_.emplace_back(bufHandle);
         break;
       }
-      if (isContiguous(input)) {
+      if (isContiguous(input) && !outputs_set.count(input)) {
         BufHandle inBuffer(
             "t" + input_name_map_[input],
             toExprHandles(*tt->sizes().concrete_sizes()),
