@@ -9777,11 +9777,7 @@ op_db: List[OpInfo] = [
            op=torch.linalg.slogdet,
            dtypes=floating_and_complex_types(),
            sample_inputs_func=sample_inputs_linalg_slogdet,
-           decorators=[skipCUDAIfNoMagma, skipCUDAIfRocm, skipCPUIfNoLapack],
-           skips=(
-               # RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_noncontiguous_samples'),
-           )),
+           decorators=[skipCUDAIfNoMagma, skipCUDAIfRocm, skipCPUIfNoLapack],),
     OpInfo('linalg.vector_norm',
            op=torch.linalg.vector_norm,
            dtypes=floating_and_complex_types_and(torch.float16, torch.bfloat16),
@@ -11963,13 +11959,14 @@ op_db: List[OpInfo] = [
                DecorateInfo(unittest.skip("67470!"),
                             'TestCommon', 'test_noncontiguous_samples',
                             device_type='cpu', dtypes=(torch.long,)),
-               DecorateInfo(
-                   toleranceOverride({torch.complex64: tol(atol=1e-05, rtol=1.2e-03)}),
-                   'TestMathBits', 'test_conj_view'),
+               DecorateInfo(toleranceOverride({torch.complex64: tol(atol=1e-05, rtol=1.2e-03)}),
+                            'TestMathBits', 'test_conj_view'),
                # Fails on XLA.
                # AssertionError: False is not true : Tensors failed to compare as equal
                DecorateInfo(unittest.expectedFailure, 'TestOpInfo', device_type='xla', dtypes=(torch.long,)),
-           ),
+               DecorateInfo(toleranceOverride({torch.float32: tol(atol=1e-05, rtol=1.2e-03)}),
+                            'TestCommon', 'test_noncontiguous_samples',
+                            device_type='cuda', active_if=TEST_WITH_ROCM)),
            skips=(
                # RuntimeError:
                # object has no attribute __rmatmul__:
@@ -12600,6 +12597,8 @@ op_db: List[OpInfo] = [
            sample_inputs_func=sample_inputs_svd_lowrank,
            decorators=[skipCUDAIfNoMagmaAndNoCusolver, skipCUDAIfRocm, skipCPUIfNoLapack],
            skips=(
+               DecorateInfo(toleranceOverride({torch.float32: tol(atol=1e-03, rtol=1e-03)}),
+                            'TestCommonCuda', 'test_noncontiguous'),
                # test does not work with passing lambda for op
                DecorateInfo(unittest.skip("Skipped!"), 'TestJit', 'test_variant_consistency_jit'),
            )),
