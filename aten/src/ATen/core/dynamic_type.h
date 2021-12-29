@@ -181,6 +181,7 @@ struct TORCH_API DynamicTypeTrait<NAME ## Type> { \
 static auto tagValue() { \
   return DynamicType::Tag::NAME; \
 } \
+static const DynamicTypePtr& getBaseType(); \
 };
     FORALL_DYNAMIC_TYPES(DYNAMIC_TYPE_TAG_VALUE)
 #undef DYNAMIC_TYPE_TAG_VALUE
