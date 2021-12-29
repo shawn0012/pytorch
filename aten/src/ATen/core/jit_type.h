@@ -623,7 +623,6 @@ struct TORCH_API TensorType : public Type {
     return copy;
   }
 
-
   TensorTypePtr withDim(c10::optional<size_t> d) {
     auto copy = clone();
     // withDim is only used by the legacy executor
@@ -654,7 +653,7 @@ struct TORCH_API TensorType : public Type {
         sizes, contiguousStridesOf(sizes));
   }
 
-  TensorTypePtr withDevice(at::Device device) const {
+  TensorTypePtr withDevice(const c10::optional<at::Device> device) const {
     auto copy = clone();
     copy->device_ = device;
     return copy;
