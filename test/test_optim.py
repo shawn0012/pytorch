@@ -477,6 +477,70 @@ class TestOptim(TestCase):
             for p1, p2 in zip(res[0], res[1]):
                 self.assertEqual(p1, p2, atol=5e-5, rtol=0)
 
+    def test_optimizers_foreach_flag(self):
+        if not torch.cuda.is_available():
+            return
+
+        optimizer_pairs_with_flags = [
+            # ((optim.Adam), dict(weight_decay=1., amsgrad=True)),
+            # ((optim.Adam), dict(weight_decay=1., amsgrad=False)),
+            # ((optim.Adam), dict(weight_decay=0., amsgrad=True)),
+            # ((optim.Adam), dict(weight_decay=0., amsgrad=False)),
+            # ((optim.AdamW), dict(weight_decay=1., amsgrad=True)),
+            # ((optim.AdamW), dict(weight_decay=1., amsgrad=False)),
+            # ((optim.AdamW), dict(weight_decay=0., amsgrad=True)),
+            # ((optim.AdamW), dict(weight_decay=0., amsgrad=False)),
+            # ((optim.NAdam), dict(weight_decay=0., momentum_decay=6e-3)),
+            # ((optim.NAdam), dict(weight_decay=1., momentum_decay=6e-3)),
+            # ((optim.NAdam), dict(weight_decay=0., momentum_decay=4e-3)),
+            # ((optim.NAdam), dict(weight_decay=0.01, momentum_decay=4e-3)),
+            # ((optim.SGD), dict(lr=0.2, momentum=1, dampening=0, weight_decay=1, nesterov=True)),
+            # ((optim.SGD), dict(lr=0.2, momentum=1, dampening=0.5, weight_decay=1, nesterov=False)),
+            # ((optim.RAdam), dict(weight_decay=0)),
+            # ((optim.RAdam), dict(weight_decay=1)),
+            # ((optim.RMSprop), dict(weight_decay=1, momentum=1, centered=True)),
+            # ((optim.RMSprop), dict(weight_decay=1, momentum=0, centered=True)),
+            # ((optim.RMSprop), dict(weight_decay=1, momentum=1, centered=False)),
+            # ((optim.RMSprop), dict(weight_decay=0, momentum=1, centered=False)),
+            # ((optim.Rprop), dict(lr=1e-2, etas=(0.5, 1.2), step_sizes=(1e-6, 50))),
+            # ((optim.ASGD), dict(weight_decay=0)),
+            # ((optim.ASGD), dict(weight_decay=1)),
+            # ((optim.Adamax), dict(weight_decay=0)),
+            # ((optim.Adamax), dict(weight_decay=1)),
+            ((optim.Adadelta), dict(weight_decay=0)),
+            ((optim.Adadelta), dict(weight_decay=1)),
+            # ((optim.Adagrad), dict(weight_decay=0)),
+            # ((optim.Adagrad), dict(weight_decay=1)),
+        ]
+
+        kIterations = 3
+        device = 'cuda'
+
+        for opt, params in optimizer_pairs_with_flags:
+            res = []
+            for foreach in (True, False):
+                input = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], dtype=torch.float64, device=device).reshape(3, 2)
+
+                torch.manual_seed(1)
+                model = torch.nn.Sequential(torch.nn.Linear(2, 3),
+                                            torch.nn.Sigmoid(),
+                                            torch.nn.Linear(3, 1),
+                                            torch.nn.Sigmoid())
+                model.to(dtype=torch.float64, device=device)
+                optimizer = opt(model.parameters(), foreach=foreach, **params)
+
+                for _ in range(kIterations):
+                    optimizer.zero_grad()
+                    output = model(input)
+                    loss = output.sum()
+                    loss.backward()
+                    optimizer.step()
+
+                res.append(model.parameters())
+
+            for p1, p2 in zip(res[0], res[1]):
+                self.assertEqual(p1, p2, atol=5e-5, rtol=0)
+
     def test_adam(self):
         for optimizer in [optim.Adam, optim_mt.Adam]:
             self._test_basic_cases(
@@ -621,6 +685,31 @@ class TestOptim(TestCase):
             )
             with self.assertRaisesRegex(ValueError, "Invalid rho value: 1.1"):
                 optimizer(None, lr=1e-2, rho=1.1)
+
+    # new test that test_adadelta can be switched to when merge is complete and multitensor is deleted
+    @skipIfRocm
+    def test_adadelta_new(self):
+        optimizer = optim.Adadelta
+        for foreach in [True, False]:
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, foreach=foreach))
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, rho=0.95, foreach=foreach))
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, rho=0.95, foreach=foreach)),
+                [lambda opt: StepLR(opt, gamma=0.9, step_size=10),
+                 lambda opt: ReduceLROnPlateau(opt)]
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer([weight, bias], weight_decay=1, foreach=foreach)
+            )
+            with self.assertRaisesRegex(ValueError, "Invalid rho value: 1.1"):
+                optimizer(None, lr=1e-2, rho=1.1, foreach=foreach)
 
     def test_adadelta_complex(self):
         for optimizer in [optim.Adadelta]:
