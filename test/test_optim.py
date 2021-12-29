@@ -509,8 +509,8 @@ class TestOptim(TestCase):
             # ((optim.Adamax), dict(weight_decay=1)),
             ((optim.Adadelta), dict(weight_decay=0)),
             ((optim.Adadelta), dict(weight_decay=1)),
-            # ((optim.Adagrad), dict(weight_decay=0)),
-            # ((optim.Adagrad), dict(weight_decay=1)),
+            ((optim.Adagrad), dict(weight_decay=0)),
+            ((optim.Adagrad), dict(weight_decay=1)),
         ]
 
         kIterations = 3
@@ -775,6 +775,39 @@ class TestOptim(TestCase):
             )
             with self.assertRaisesRegex(ValueError, "Invalid lr_decay value: -0.5"):
                 optimizer(None, lr=1e-2, lr_decay=-0.5)
+
+    # new test that test_adagrad can be switched to when merge is complete and multitensor is deleted
+    def test_adagrad_new(self):
+        optimizer = optim.Adagrad
+        for foreach in [True, False]:
+            self._test_basic_cases(
+                lambda weight, bias: optimizer([weight, bias], lr=1e-1, foreach=foreach)
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    [weight, bias], lr=1e-1, initial_accumulator_value=0.1, foreach=foreach
+                )
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, lr=1e-2),
+                    lr=1e-1, foreach=foreach)
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, lr=1e-2),
+                    lr=1e-1, foreach=foreach),
+                [lambda opt: ReduceLROnPlateau(opt)]
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, lr=1e-2),
+                    lr=1e-1, foreach=foreach),
+                [lambda opt: ReduceLROnPlateau(opt),
+                 lambda opt: ExponentialLR(opt, gamma=0.99)]
+            )
+            with self.assertRaisesRegex(ValueError, "Invalid lr_decay value: -0.5"):
+                optimizer(None, lr=1e-2, lr_decay=-0.5, foreach=foreach)
 
     def test_adagrad_sparse(self):
         for optimizer in [optim.Adagrad, optim_mt.Adagrad]:
