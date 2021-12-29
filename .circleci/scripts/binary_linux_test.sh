@@ -1,9 +1,18 @@
 #!/bin/bash
 
-source /home/circleci/project/env
-cat >/home/circleci/project/ci_test_script.sh <<EOL
+OUTPUT_SCRIPT=${OUTPUT_SCRIPT:-/home/circleci/project/ci_test_script.sh}
+
+# only source if file exists
+if [[ -f /home/circleci/project/env ]]; then
+  source /home/circleci/project/env
+fi
+cat >"${OUTPUT_SCRIPT}" <<EOL
 # =================== The following code will be executed inside Docker container ===================
 set -eux -o pipefail
+
+retry () {
+    "\$@"  || (sleep 1 && "\$@") || (sleep 2 && "\$@")
+}
 
 python_nodot="\$(echo $DESIRED_PYTHON | tr -d m.u)"
 
@@ -92,4 +101,4 @@ EOL
 echo
 echo
 echo "The script that will run in the next step is:"
-cat /home/circleci/project/ci_test_script.sh
+cat "${OUTPUT_SCRIPT}"
