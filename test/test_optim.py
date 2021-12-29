@@ -505,8 +505,8 @@ class TestOptim(TestCase):
             # ((optim.Rprop), dict(lr=1e-2, etas=(0.5, 1.2), step_sizes=(1e-6, 50))),
             # ((optim.ASGD), dict(weight_decay=0)),
             # ((optim.ASGD), dict(weight_decay=1)),
-            # ((optim.Adamax), dict(weight_decay=0)),
-            # ((optim.Adamax), dict(weight_decay=1)),
+            ((optim.Adamax), dict(weight_decay=0)),
+            ((optim.Adamax), dict(weight_decay=1)),
             ((optim.Adadelta), dict(weight_decay=0)),
             ((optim.Adadelta), dict(weight_decay=1)),
             ((optim.Adagrad), dict(weight_decay=0)),
@@ -846,6 +846,24 @@ class TestOptim(TestCase):
             )
             with self.assertRaisesRegex(ValueError, "Invalid beta parameter at index 1: 1.0"):
                 optimizer(None, lr=1e-2, betas=(0.0, 1.0))
+
+    # new test that test_adamax can be switched to when merge is complete and multitensor is deleted
+    def test_adamax_new(self):
+        optimizer = optim.Adamax
+        for foreach in [True, False]:
+            self._test_basic_cases(
+                lambda weight, bias: optimizer([weight, bias], lr=1e-1, foreach=foreach)
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer(
+                    self._build_params_dict(weight, bias, lr=1e-2),
+                    lr=1e-1, foreach=foreach)
+            )
+            self._test_basic_cases(
+                lambda weight, bias: optimizer([weight, bias], lr=1e-1, weight_decay=1, foreach=foreach)
+            )
+            with self.assertRaisesRegex(ValueError, "Invalid beta parameter at index 1: 1.0"):
+                optimizer(None, lr=1e-2, betas=(0.0, 1.0), foreach=foreach)
 
     def test_radam(self):
         for optimizer in [optim.RAdam, optim_mt.RAdam]:
